@@ -1,0 +1,17 @@
+### Get the latest anime releases
+GET http://localhost:5000/api/latest
+
+### Search for anime
+GET http://localhost:5000/api/search?name=dadadan
+
+### Get Anime by Slug
+GET http://localhost:5000/api/anime?slug=one-piece
+
+### Get Episodes by Anime Slug
+GET http://localhost:5000/api/episodes?slug=one-piece&page=1
+
+### Get Episode streams by Episode ID
+GET http://localhost:5000/api/servers?slug=one-piece&episode=1
+
+### Play Episode
+GET http://localhost:5000/api/play?server=Streamwish&slug=aHR0cHM6Ly9zZmFzdHdpc2guY29tL2UvbG9yc2dqbXM4Ym4w
