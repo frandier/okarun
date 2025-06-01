@@ -36,7 +36,7 @@ func (j Jkanime) GetLatestEpisodes() ([]LatestEpisode, error) {
 				slug: anime.href.split('/')[3],
 				img: anime.querySelector('img').src,
 				title: anime.querySelector('h5').textContent,
-				episode: document.querySelector('.badge-primary').textContent.replace(/\s+/g, ' ').trim().split(' ')[1]
+				episode: anime.querySelector('.badge-primary').textContent.replace(/\s+/g, ' ').trim().split(' ')[1]
 			}));
 		`, &animes),
 	)
