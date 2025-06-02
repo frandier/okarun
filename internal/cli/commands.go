@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os/exec"
 	"yokai/internal/anime"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -117,6 +118,22 @@ func UpdateServerList(m *Model, msg FetchServersMsg) tea.Cmd {
 	return nil
 }
 
+// NavigateToServers prepares the model for the servers view
+func NavigateToServers(m *Model, servers []anime.Server) tea.Cmd {
+	m.activeView = "servers"
+	m.servers = servers
+
+	// Convert servers to list items
+	items := make([]list.Item, len(servers))
+	for i, server := range servers {
+		items[i] = NewMenuItem(server.Server, "Select to play episode")
+	}
+
+	m.list.Title = "🌸 Select Server (Press ESC to go back)"
+	m.list.SetItems(items)
+	return nil
+}
+
 // NavigateBack handles going back to the previous view
 func NavigateBack(m *Model) tea.Cmd {
 	switch m.activeView {
@@ -139,4 +156,36 @@ func NavigateBack(m *Model) tea.Cmd {
 	default:
 		return NavigateToMain(m)
 	}
+}
+
+// PlayEpisodeMsg represents a message containing the streaming URL
+type PlayEpisodeMsg struct {
+	StreamingURL string
+	Err          error
+}
+
+// PlayEpisode starts playback of the selected episode
+func PlayEpisode(server anime.Server) tea.Cmd {
+	return func() tea.Msg {
+		client := &anime.Jkanime{}
+		streamingURL, err := client.GetStreaming(server.Server, server.Remote)
+		return PlayEpisodeMsg{StreamingURL: streamingURL, Err: err}
+	}
+}
+
+// HandlePlayback handles the MPV playback of the streaming URL
+func HandlePlayback(m *Model, msg PlayEpisodeMsg) tea.Cmd {
+	if msg.Err != nil {
+		m.err = msg.Err
+		return nil
+	}
+
+	// Run MPV in a separate goroutine to not block the UI
+	go func() {
+		exec.Command("mpv", msg.StreamingURL).Run()
+	}()
+
+	// Just reset the loading state and stay in the current view
+	m.loading = false
+	return nil
 }

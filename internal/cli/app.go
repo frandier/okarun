@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -73,8 +71,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						idx := m.list.Index()
 						if idx < len(m.servers) {
 							server := m.servers[idx]
-							fmt.Printf("\nOpening server: %s\n", server.Remote)
-							return m, tea.Quit
+							m.loading = true
+							return m, PlayEpisode(server)
 						}
 					}
 				}
@@ -86,6 +84,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FetchServersMsg:
 		return m, UpdateServerList(&m, msg)
+
+	case PlayEpisodeMsg:
+		return m, HandlePlayback(&m, msg)
 
 	case tea.WindowSizeMsg:
 		h, v := DocStyle.GetFrameSize()
