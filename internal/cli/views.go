@@ -18,6 +18,8 @@ func (m Model) View() string {
 		content = HighlightStyle.Render(fmt.Sprintf("Error: %v", m.err))
 	} else if m.loading {
 		content = fmt.Sprintf("%s Loading...", m.spinner.View())
+	} else if m.searchMode {
+		content = fmt.Sprintf("Search Anime:\n\n%s\n\n(Enter to search, Esc to cancel)", m.textInput.View())
 	} else {
 		content = m.list.View()
 	}

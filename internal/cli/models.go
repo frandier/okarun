@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 )
 
 // Model represents the application state
@@ -14,14 +15,22 @@ type Model struct {
 	help            help.Model
 	keys            KeyMap
 	spinner         spinner.Model
+	textInput       textinput.Model
 	loading         bool
 	quitting        bool
 	animes          []anime.LatestEpisode
 	servers         []anime.Server
 	selectedEpisode *anime.LatestEpisode
+	searchResults   []anime.Anime
+	currentPage     int
+	totalPages      int
+	currentAnime    *anime.Anime
+	currentEpisodes *anime.Episode
 	err             error
 	activeView      string
+	previousView    string
 	mainMenuItems   []list.Item
+	searchMode      bool
 }
 
 // MenuItem represents an item in any menu list
