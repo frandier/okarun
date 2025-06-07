@@ -8,7 +8,7 @@ cli:
 	go run ./cmd/cli/main.go
 
 build-cli:
-	go build -o bin/okarun ./cmd/cli/main.go
+	go build -o bin/cli/okarun ./cmd/cli/main.go
 
-install-cli:
-	go install ./cmd/cli
+build-server:
+	go build -o bin/server/okarun ./cmd/server/main.go

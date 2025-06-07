@@ -9,13 +9,12 @@ Okarun is a powerful anime streaming tool that provides both a CLI and server in
 - 🌐 Multiple streaming servers support
 - 🎮 Interactive CLI interface with pagination
 - 🚀 RESTful API server
-- 📱 Responsive and modern web interface
 
 ## 📋 Requirements
 
 - Go 1.16 or higher
 - MPV player for video playback
-- Modern web browser for the server interface
+- Modern web browser for the server interface (Chromium base browser)
 
 ### Dependencies
 ```bash
@@ -34,13 +33,23 @@ sudo pacman -S mpv
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/okarun.git
+git clone https://github.com/frandier/okarun.git
 cd okarun
 ```
 
-2. Build the project:
+2. Install dependencies:
 ```bash
-make build
+go get
+```
+
+3. Build the cli project:
+```bash
+make build-cli
+```
+
+4. Build the server project:
+```bash
+make build-server
 ```
 
 ## 💻 Usage
@@ -49,7 +58,7 @@ make build
 
 Run the CLI application:
 ```bash
-./okarun
+./bin/cli/okarun
 ```
 
 #### CLI Navigation
@@ -75,10 +84,10 @@ Run the CLI application:
 
 Start the server:
 ```bash
-./okarun server
+./bin/server/okarun
 ```
 
-The server will start on `http://localhost:8080` by default.
+The server will start on `http://localhost:5000` by default.
 
 #### API Endpoints
 
