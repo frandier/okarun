@@ -1,5 +1,9 @@
 # Okarun 🌸
 
+<p align="center">
+  <img width="600" src="./okarun.svg">
+</p>
+
 Okarun is a powerful anime streaming tool that provides both a CLI and server interface to watch your favorite anime. Written in Go, it offers a seamless and interactive way to search, browse, and watch anime episodes.
 
 ## ✨ Features
