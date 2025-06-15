@@ -33,7 +33,54 @@ brew install mpv
 sudo pacman -S mpv
 ```
 
-## 🚀 Installation
+## 📥 Installation
+
+### Using GitHub Releases
+
+You can download the pre-compiled binaries for your operating system from the [GitHub releases page](https://github.com/frandier/okarun/releases).
+
+1. Visit the [releases page](https://github.com/frandier/okarun/releases)
+2. Download the appropriate version for your operating system:
+   - For Linux: `okarun_linux_amd64.tar.gz`
+   - For macOS: `okarun_darwin_amd64.tar.gz`
+   - For Windows: `okarun_windows_amd64.zip`
+3. Extract the downloaded archive
+4. Move the binary to a location in your PATH:
+
+```bash
+# Linux/macOS (replace X.Y.Z with the version number)
+tar xzf okarun_*_amd64.tar.gz
+sudo mv okarun /usr/local/bin/
+
+# Or move it to your local bin directory
+mkdir -p ~/.local/bin
+mv okarun ~/.local/bin/
+```
+
+### Windows Installation Steps
+
+1. Extract the downloaded `okarun_windows_amd64.zip` file
+2. You have two options:
+   
+   Option 1 - Add to System PATH:
+   ```powershell
+   # Create a directory for the application (PowerShell)
+   New-Item -ItemType Directory -Path "$env:USERPROFILE\Applications\okarun" -Force
+
+   # Move the extracted okarun.exe to the directory
+   Move-Item -Path "okarun.exe" -Destination "$env:USERPROFILE\Applications\okarun"
+
+   # Add to PATH (requires administrator PowerShell)
+   $newPath = "$env:USERPROFILE\Applications\okarun"
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$newPath", [EnvironmentVariableTarget]::User)
+   ```
+
+   Option 2 - Direct Use:
+   - Create a folder like `C:\Programs\okarun`
+   - Move `okarun.exe` to this folder
+   - Create a shortcut to `okarun.exe` on your desktop or start menu
+
+## 🚀Local development and Installation
 
 1. Clone the repository:
 ```bash

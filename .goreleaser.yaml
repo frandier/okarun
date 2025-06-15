@@ -1,0 +1,40 @@
+# .goreleaser.yml
+project_name: okarun
+builds:
+  - id: cli
+    main: ./cmd/cli/main.go
+    binary: okarun
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - 386
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    builds:
+      - cli
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - okarun.svg
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ .Commit }}"
+
+changelog:
+  skip: true

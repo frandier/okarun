@@ -12,3 +12,12 @@ build-cli:
 
 build-server:
 	go build -o bin/server/okarun ./cmd/server/main.go
+
+release-snapshot:
+	goreleaser release --snapshot --clean
+
+release-check:
+	goreleaser check
+
+release:
+	goreleaser release --clean

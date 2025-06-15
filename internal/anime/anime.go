@@ -6,84 +6,114 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
+	"github.com/gocolly/colly/v2"
 )
 
 type Jkanime struct{}
 
 func (j Jkanime) GetLatestEpisodes() ([]LatestEpisode, error) {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"),
+	var episodes []LatestEpisode
+
+	c := colly.NewCollector(
+		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."),
+		colly.Async(true),
 	)
+	c.Limit(&colly.LimitRule{Parallelism: 5, Delay: 500 * time.Millisecond})
 
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
+	c.OnHTML("#animes .card a", func(e *colly.HTMLElement) {
+		slug := strings.Split(e.Attr("href"), "/")[3]
+		img := e.ChildAttr("img", "src")
+		title := e.ChildText("h5")
+		epText := e.ChildText(".badge-primary")
+		epParts := strings.Fields(epText)
+		episode := ""
+		if len(epParts) > 1 {
+			episode = epParts[1]
+		}
 
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	defer cancel()
+		episodes = append(episodes, LatestEpisode{
+			Slug:    slug,
+			Img:     img,
+			Title:   title,
+			Episode: episode,
+		})
+	})
 
-	var animes []LatestEpisode
-
-	err := chromedp.Run(ctx,
-		chromedp.Navigate("https://jkanime.net/"),
-		chromedp.Evaluate(`
-			Array.from(document.querySelectorAll('#animes .card a')).map(anime => ({
-				slug: anime.href.split('/')[3],
-				img: anime.querySelector('img').src,
-				title: anime.querySelector('h5').textContent,
-				episode: anime.querySelector('.badge-primary').textContent.replace(/\s+/g, ' ').trim().split(' ')[1]
-			}));
-		`, &animes),
-	)
+	err := c.Visit("https://jkanime.net/")
 	if err != nil {
 		return nil, err
 	}
 
-	return animes, nil
+	c.Wait()
+	return episodes, nil
 }
 
 func (j Jkanime) GetAnime(slug string) (*Anime, error) {
-
 	if slug == "" {
 		return nil, errors.New("slug cannot be empty")
 	}
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"),
+	anime := &Anime{
+		AdditionalInfo: make(map[string]interface{}),
+	}
+
+	c := colly.NewCollector(
+		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."),
 	)
 
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
+	// Título
+	c.OnHTML(".anime_info h3", func(e *colly.HTMLElement) {
+		anime.Title = strings.TrimSpace(e.Text)
+	})
 
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	defer cancel()
+	// Sinopsis
+	c.OnHTML(".anime_info .scroll", func(e *colly.HTMLElement) {
+		anime.Synopsis = strings.TrimSpace(e.Text)
+	})
 
-	var anime Anime
+	// Imagen
+	c.OnHTML(".anime_pic img", func(e *colly.HTMLElement) {
+		anime.Img = e.Attr("src")
+	})
 
-	err := chromedp.Run(ctx,
-		chromedp.Navigate("https://jkanime.net/"+slug),
-		chromedp.Evaluate(`
-			(() => ({
-				title: document.querySelector('.anime_info h3').textContent,
-				synopsis: document.querySelector('.anime_info .scroll').textContent,
-				img: document.querySelector('.anime_pic img').src
-			}))()
-		`, &anime),
-		chromedp.Evaluate(AddionalAnimeInfoJsCode, &anime.AdditionalInfo),
-	)
+	// Información adicional tipo: 'Género', 'Estado', 'Estudio', etc.
+	c.OnHTML(".card-bod ul li", func(e *colly.HTMLElement) {
+		key := ""
+		values := []string{}
+
+		e.DOM.Contents().Each(func(i int, s *goquery.Selection) {
+			if goquery.NodeName(s) == "span" && key == "" {
+				// es el label, lo usamos como clave
+				key = strings.Trim(strings.TrimSuffix(s.Text(), ":"), " ")
+				key = strings.ToLower(key)
+			} else {
+				text := strings.TrimSpace(s.Text())
+				if text != "" && text != "," {
+					values = append(values, text)
+				}
+			}
+		})
+
+		if key != "" {
+			if len(values) == 1 {
+				anime.AdditionalInfo[key] = values[0]
+			} else if len(values) > 1 {
+				anime.AdditionalInfo[key] = values
+			}
+		}
+	})
+
+	err := c.Visit("https://jkanime.net/" + slug)
 	if err != nil {
 		return nil, err
 	}
 
-	return &anime, nil
+	return anime, nil
 }
 
 func (j Jkanime) GetEpisodes(slug string, page int) (*Episode, error) {
@@ -281,37 +311,48 @@ func (j Jkanime) GetSearch(name string, page int) ([]Anime, error) {
 		return nil, errors.New("name cannot be empty")
 	}
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"),
-	)
+	var results []Anime
 
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
+	c := colly.NewCollector()
 
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	defer cancel()
+	c.OnHTML(".anime__item", func(e *colly.HTMLElement) {
+		anime := Anime{
+			Title:          strings.TrimSpace(e.ChildText("h5")),
+			Img:            e.ChildAttr(".anime__item__pic", "data-setbg"),
+			Synopsis:       "",
+			AdditionalInfo: map[string]interface{}{},
+		}
 
-	var result []Anime
-
-	err := chromedp.Run(ctx,
-		chromedp.Navigate(fmt.Sprintf("https://jkanime.net/buscar/%s", name)),
-		chromedp.Evaluate(`Array.from(document.querySelectorAll('.anime__item')).map(item => ({
-			title: item.querySelector('h5').textContent,
-			slug: item.querySelector('a').href.split('/')[3],
-			img: document.querySelector('.anime__item__pic').dataset.setbg,
-			additional_info: {
-				estado: item.querySelector('li').textContent,
-				tipo: item.querySelector('li.anime').textContent.trim(),
+		href := e.ChildAttr("a", "href")
+		u, err := url.Parse(href)
+		if err == nil {
+			segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+			if len(segments) > 0 {
+				anime.Slug = segments[0]
 			}
-		}))`, &result),
-	)
+		}
 
-	if err != nil {
+		firstLi := e.ChildText("ul li")
+		if firstLi != "" {
+			anime.AdditionalInfo["estado"] = strings.TrimSpace(firstLi)
+		}
+
+		tipo := e.ChildText("li.anime")
+		if tipo != "" {
+			anime.AdditionalInfo["tipo"] = strings.TrimSpace(tipo)
+		}
+
+		results = append(results, anime)
+	})
+
+	searchURL := fmt.Sprintf("https://jkanime.net/buscar/%s", url.PathEscape(name))
+	if page > 1 {
+		searchURL += fmt.Sprintf("/%d", page)
+	}
+
+	if err := c.Visit(searchURL); err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return results, nil
 }
