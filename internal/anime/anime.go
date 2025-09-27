@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/RomainMichau/cloudscraper_go/cloudscraper"
 	"github.com/chromedp/chromedp"
-	"github.com/gocolly/colly/v2"
 )
 
 type Jkanime struct{}
@@ -19,17 +18,24 @@ type Jkanime struct{}
 func (j Jkanime) GetLatestEpisodes() ([]LatestEpisode, error) {
 	var episodes []LatestEpisode
 
-	c := colly.NewCollector(
-		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."),
-		colly.Async(true),
-	)
-	c.Limit(&colly.LimitRule{Parallelism: 5, Delay: 500 * time.Millisecond})
+	client, _ := cloudscraper.Init(false, false)
+	res, err := client.Get("https://jkanime.net/", make(map[string]string), "")
 
-	c.OnHTML("#animes .card a", func(e *colly.HTMLElement) {
-		slug := strings.Split(e.Attr("href"), "/")[3]
-		img := e.ChildAttr("img", "src")
-		title := e.ChildText("h5")
-		epText := e.ChildText(".badge-primary")
+	if err != nil {
+		return nil, err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(res.Body))
+	if err != nil {
+		return nil, err
+	}
+
+	doc.Find("#animes .card").Each(func(i int, s *goquery.Selection) {
+		title := s.Find(".card-title").Text()
+		link, _ := s.Find("a").Attr("href")
+		slug := strings.Split(link, "/")[3]
+		img, _ := s.Find("img").Attr("src")
+		epText := s.Find(".badge-primary").Text()
 		epParts := strings.Fields(epText)
 		episode := ""
 		if len(epParts) > 1 {
@@ -44,12 +50,6 @@ func (j Jkanime) GetLatestEpisodes() ([]LatestEpisode, error) {
 		})
 	})
 
-	err := c.Visit("https://jkanime.net/")
-	if err != nil {
-		return nil, err
-	}
-
-	c.Wait()
 	return episodes, nil
 }
 
@@ -62,31 +62,32 @@ func (j Jkanime) GetAnime(slug string) (*Anime, error) {
 		AdditionalInfo: make(map[string]interface{}),
 	}
 
-	c := colly.NewCollector(
-		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."),
-	)
+	client, _ := cloudscraper.Init(false, false)
+	res, err := client.Get("https://jkanime.net/"+slug, make(map[string]string), "")
+	if err != nil {
+		return nil, err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(res.Body))
+	if err != nil {
+		return nil, err
+	}
 
 	// Título
-	c.OnHTML(".anime_info h3", func(e *colly.HTMLElement) {
-		anime.Title = strings.TrimSpace(e.Text)
-	})
+	anime.Title = strings.TrimSpace(doc.Find(".anime_info h3").Text())
 
 	// Sinopsis
-	c.OnHTML(".anime_info .scroll", func(e *colly.HTMLElement) {
-		anime.Synopsis = strings.TrimSpace(e.Text)
-	})
+	anime.Synopsis = strings.TrimSpace(doc.Find(".anime_info .scroll").Text())
 
 	// Imagen
-	c.OnHTML(".anime_pic img", func(e *colly.HTMLElement) {
-		anime.Img = e.Attr("src")
-	})
+	anime.Img, _ = doc.Find(".anime_pic img").Attr("src")
 
 	// Información adicional tipo: 'Género', 'Estado', 'Estudio', etc.
-	c.OnHTML(".card-bod ul li", func(e *colly.HTMLElement) {
+	doc.Find(".card-bod ul li").Each(func(i int, s *goquery.Selection) {
 		key := ""
 		values := []string{}
 
-		e.DOM.Contents().Each(func(i int, s *goquery.Selection) {
+		s.Contents().Each(func(i int, s *goquery.Selection) {
 			if goquery.NodeName(s) == "span" && key == "" {
 				// es el label, lo usamos como clave
 				key = strings.Trim(strings.TrimSuffix(s.Text(), ":"), " ")
@@ -107,11 +108,6 @@ func (j Jkanime) GetAnime(slug string) (*Anime, error) {
 			}
 		}
 	})
-
-	err := c.Visit("https://jkanime.net/" + slug)
-	if err != nil {
-		return nil, err
-	}
 
 	return anime, nil
 }
@@ -151,7 +147,7 @@ func (j Jkanime) GetEpisodes(slug string, page int) (*Episode, error) {
 
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(url),
-		chromedp.Sleep(1*time.Second),
+		chromedp.WaitVisible("#episodes-content .anime__item", chromedp.ByQuery),
 		chromedp.Evaluate(`
 			(() => ({
 				total_pages:  document.querySelectorAll('.anime__pagination .option').length,
@@ -275,11 +271,24 @@ func (j Jkanime) GetStreaming(server, slug string) (string, error) {
 
 	switch server {
 	case "Desu":
-		script = `parts.segments.swarmId`
+		script = `dp.options.video.url`
 	case "Magi":
 		script = `player.options_.sources[0].src`
 	case "Streamwish":
-		script = `player.getConfig().playlist[0].file`
+		script = `
+			(() => {
+				const file = jwplayer().getConfig().playlist[0].file;
+				let url;
+
+				if (file.startsWith("http://") || file.startsWith("https://")) {
+					url = file;
+				} else {
+					url = window.location.origin + file;
+				}
+			
+				return url;
+			})()
+		`
 	case "Vidhide":
 		script = `player.getConfig().playlist[0].file`
 	case "Filemoon":
@@ -313,46 +322,42 @@ func (j Jkanime) GetSearch(name string, page int) ([]Anime, error) {
 
 	var results []Anime
 
-	c := colly.NewCollector()
-
-	c.OnHTML(".anime__item", func(e *colly.HTMLElement) {
-		anime := Anime{
-			Title:          strings.TrimSpace(e.ChildText("h5")),
-			Img:            e.ChildAttr(".anime__item__pic", "data-setbg"),
-			Synopsis:       "",
-			AdditionalInfo: map[string]interface{}{},
-		}
-
-		href := e.ChildAttr("a", "href")
-		u, err := url.Parse(href)
-		if err == nil {
-			segments := strings.Split(strings.Trim(u.Path, "/"), "/")
-			if len(segments) > 0 {
-				anime.Slug = segments[0]
-			}
-		}
-
-		firstLi := e.ChildText("ul li")
-		if firstLi != "" {
-			anime.AdditionalInfo["estado"] = strings.TrimSpace(firstLi)
-		}
-
-		tipo := e.ChildText("li.anime")
-		if tipo != "" {
-			anime.AdditionalInfo["tipo"] = strings.TrimSpace(tipo)
-		}
-
-		results = append(results, anime)
-	})
-
-	searchURL := fmt.Sprintf("https://jkanime.net/buscar/%s", url.PathEscape(name))
-	if page > 1 {
-		searchURL += fmt.Sprintf("/%d", page)
-	}
-
-	if err := c.Visit(searchURL); err != nil {
+	client, _ := cloudscraper.Init(false, false)
+	res, err := client.Get(fmt.Sprintf("https://jkanime.net/buscar/%s", url.PathEscape(name)), make(map[string]string), "")
+	if err != nil {
 		return nil, err
 	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(res.Body))
+	if err != nil {
+		return nil, err
+	}
+
+	doc.Find(".anime__item").Each(func(i int, s *goquery.Selection) {
+		title := strings.TrimSpace(s.Find("h5").Text())
+		img, _ := s.Find(".anime__item__pic").Attr("data-setbg")
+		link, _ := s.Find("a").Attr("href")
+		slug := strings.Split(link, "/")[3]
+
+		firstLi := s.Find("ul li").First().Text()
+		tipo := s.Find("li.anime").Text()
+
+		additionalInfo := make(map[string]interface{})
+		if firstLi != "" {
+			additionalInfo["estado"] = strings.TrimSpace(firstLi)
+		}
+		if tipo != "" {
+			additionalInfo["tipo"] = strings.TrimSpace(tipo)
+		}
+
+		results = append(results, Anime{
+			Title:          title,
+			Img:            img,
+			Slug:           slug,
+			Synopsis:       "",
+			AdditionalInfo: additionalInfo,
+		})
+	})
 
 	return results, nil
 }

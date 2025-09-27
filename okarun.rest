@@ -14,4 +14,4 @@ GET http://localhost:5000/api/episodes?slug=one-piece&page=1
 GET http://localhost:5000/api/servers?slug=one-piece&episode=1
 
 ### Play Episode
-GET http://localhost:5000/api/play?server=Streamwish&slug=aHR0cHM6Ly9zZmFzdHdpc2guY29tL2UvbG9yc2dqbXM4Ym4w
+GET http://localhost:5000/api/play?server=VOE&slug=aHR0cHM6Ly92b2Uuc3gvZS8yZnNlaTlmMGthanQ=
